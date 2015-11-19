@@ -4,9 +4,25 @@
 var net = require('net');
 var fs = require('fs');
 var mime = require('mime');
+var Readable = require('stream').Readable;
+var util = require('util');
+util.inherits(ReadableStream, Readable);
 var port = process.env.PORT ||3000;
 var writableStream;
 var request= {};
+function ReadableStream() {
+  Readable.call(this);
+}
+ReadableStream.prototype._read = function(){
+  //this.push('test chunk');
+};
+borderStream = new ReadableStream();
+borderStream.on('data', function(chunk) {
+  console.log('chunk', chunk);
+});
+borderStream.on('end', function() {
+  console.log('end');
+});
 function findBoundary(arr) {
   var boundary;
   arr.forEach(function(data){
@@ -61,14 +77,12 @@ function parseRequest(data) {
 
 }
 var server = net.createServer(function(s) { //'connection' listener
-  //console.log('client connected');
   var fileType;
   var file;
   var fullData = '';
   var dataToHeaders = true;
   s.on('data', function(dataBuf) {
     writableStream = fs.createWriteStream('file2.txt');
-    console.log(writableStream.write(dataBuf));
     debugger;
     var data = dataBuf.toString();
     //console.log("data is coming", data);
@@ -79,10 +93,11 @@ var server = net.createServer(function(s) { //'connection' listener
         parseRequest(fullData.split('\r\n\r\n')[0]);
         var c = fullData.split('\r\n\r\n')[1];
         if (c) {
-          //console.log(writableStream.write(dataBuf));
           console.log('---c--------',c);
         } else {
-          //console.log(writableStream.write(dataBuf));
+          console.log('dataBuf',dataBuf);
+          //dataBuf.pipe(writableStream);
+          debugger;
           console.log('not c',c);
         }
 
@@ -90,7 +105,6 @@ var server = net.createServer(function(s) { //'connection' listener
         fullData ='';
       }
     } else {
-      console.log('write -',writableStream.write(data));
       console.log(data);
     }
 
