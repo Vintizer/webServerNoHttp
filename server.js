@@ -10,15 +10,17 @@ util.inherits(ReadableStream, Readable);
 var port = process.env.PORT ||3000;
 var writableStream;
 var request= {};
+var count = 10;
+var read = true;
 function ReadableStream() {
   Readable.call(this);
 }
 ReadableStream.prototype._read = function(){
-  //this.push('test chunk');
+
 };
 borderStream = new ReadableStream();
 borderStream.on('data', function(chunk) {
-  console.log('chunk', chunk);
+  console.log('chunk', chunk.toString());
 });
 borderStream.on('end', function() {
   console.log('end');
@@ -32,16 +34,6 @@ function findBoundary(arr) {
   });
   return boundary;
 }
-//function dataInBoundary(data, obj){
-//  var simpleObj= {};
-//  data = data.split('\r\n\r\n');
-//  simpleObj.content = {};
-//  data.forEach(function(chunk) {
-//    chunk = chunk.split('\r\n');
-//
-//  })
-//
-//}
 function fullDataToServer(s, data, fullData, request, file, fileType){
   try {
     file = fs.readFileSync('./public' + request.path);
@@ -58,18 +50,19 @@ function fullDataToServer(s, data, fullData, request, file, fileType){
 
 }
 function parseRequest(data) {
-  data = data.split('\r\n');
+  data = data.toString().split('\r\n');
   request.method = data[0].split(' ')[0];
   request.path = data[0].split(' ')[1];
   request.protocolVersion = data[0].split(' ')[2].split('/')[1];
   request.headers = {};
   request.fileType = mime.lookup('./public' + request.path);
   request.boundary = findBoundary(data);
-  for (var i = 1; i < data.length - 2; i++) {
+  for (var i = 1; i < data.length - 1; i++) {
     if (data[i].split(':')[0] === '') {
       break;
     }
     request.headers[data[i].split(':')[0]] = data[i].split(':')[1];
+    //console.log('[data[i].split()[0]]',[data[i].split(':')[0]]);
   }
   if(request.path == '/'){
     request.path = '/index.html';
@@ -83,29 +76,36 @@ var server = net.createServer(function(s) { //'connection' listener
   var dataToHeaders = true;
   s.on('data', function(dataBuf) {
     writableStream = fs.createWriteStream('file2.txt');
-    debugger;
-    var data = dataBuf.toString();
-    //console.log("data is coming", data);
-    fullData +=data;
-    if (dataToHeaders) {
-      if (fullData.indexOf('\r\n\r\n') > -1) {
-        dataToHeaders = false;
-        parseRequest(fullData.split('\r\n\r\n')[0]);
-        var c = fullData.split('\r\n\r\n')[1];
-        if (c) {
-          console.log('---c--------',c);
-        } else {
-          console.log('dataBuf',dataBuf);
-          //dataBuf.pipe(writableStream);
-          debugger;
-          console.log('not c',c);
-        }
+    var rawBuffer = new Buffer('');
+    rawBuffer = Buffer.concat([rawBuffer, dataBuf]);
 
-        fullDataToServer(s, data, fullData, request, file, fileType);
+    if (dataToHeaders) {
+      if (rawBuffer.indexOf('\r\n\r\n') > -1) {
+        dataToHeaders = false;
+
+        var index = rawBuffer.indexOf('\r\n\r\n');
+        //console.log('rawBuffer.slice(0,index)',rawBuffer.slice(index+2).toString());
+        parseRequest(rawBuffer.slice(0,index+2));
+
+        if (request.headers['Content-Type'] && request.headers['Content-Type'].indexOf('multipart/form-data') > -1) {
+          var c = rawBuffer.slice(index+2).toString();
+          if (c) {
+            //console.log('---c--------',c);
+          } else {
+            //console.log('dataBuf',dataBuf);
+            ////dataBuf.pipe(writableStream);
+            //debugger;
+            //console.log('not c',c);
+          }
+        }
+        //console.log('request',request);
+
+
+        //fullDataToServer(s, data, fullData, request, file, fileType);
         fullData ='';
       }
     } else {
-      console.log(data);
+      console.log('indexOf', data);
     }
 
 
