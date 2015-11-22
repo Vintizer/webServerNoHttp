@@ -1,6 +1,8 @@
 /**
  * Created by vintizer on 25.10.15.
  */
+"use strict";
+
 var net = require('net');
 var fs = require('fs');
 var mime = require('mime');
@@ -8,23 +10,29 @@ var Readable = require('stream').Readable;
 var util = require('util');
 util.inherits(ReadableStream, Readable);
 var port = process.env.PORT ||3000;
+var rawBuffer = new Buffer('');
 var writableStream;
 var request= {};
 var count = 10;
 var read = true;
-function ReadableStream() {
+var borderStream;
+function ReadableStream(connection, firstChunk) {
   Readable.call(this);
+  console.log('firstChunk', firstChunk.toString(), 'end chunk\r\n');
+  this.push(firstChunk);
+  connection.on('readable', function() {
+    console.log('read', connection.read(100),'end read\r\n');
+  })
 }
 ReadableStream.prototype._read = function(){
 
 };
-borderStream = new ReadableStream();
-borderStream.on('data', function(chunk) {
-  console.log('chunk', chunk.toString());
-});
-borderStream.on('end', function() {
-  console.log('end');
-});
+//borderStream.on('data', function(chunk) {
+//  console.log('chunk', chunk.toString());
+//});
+//borderStream.on('end', function() {
+//  console.log('end');
+//});
 function findBoundary(arr) {
   var boundary;
   arr.forEach(function(data){
@@ -34,7 +42,7 @@ function findBoundary(arr) {
   });
   return boundary;
 }
-function fullDataToServer(s, data, fullData, request, file, fileType){
+function fullDataToServer(s, request, file, fileType){
   try {
     file = fs.readFileSync('./public' + request.path);
   } catch(e) {
@@ -53,7 +61,9 @@ function parseRequest(data) {
   data = data.toString().split('\r\n');
   request.method = data[0].split(' ')[0];
   request.path = data[0].split(' ')[1];
-  request.protocolVersion = data[0].split(' ')[2].split('/')[1];
+  if (data[0].split(' ')[2]) {
+    request.protocolVersion = data[0].split(' ')[2].split('/')[1];
+  }
   request.headers = {};
   request.fileType = mime.lookup('./public' + request.path);
   request.boundary = findBoundary(data);
@@ -76,36 +86,30 @@ var server = net.createServer(function(s) { //'connection' listener
   var dataToHeaders = true;
   s.on('data', function(dataBuf) {
     writableStream = fs.createWriteStream('file2.txt');
-    var rawBuffer = new Buffer('');
     rawBuffer = Buffer.concat([rawBuffer, dataBuf]);
-
+    //console.log(rawBuffer.toString());
     if (dataToHeaders) {
       if (rawBuffer.indexOf('\r\n\r\n') > -1) {
+        //console.log('-1!!!!!!!\r\n', rawBuffer.toString());
         dataToHeaders = false;
 
         var index = rawBuffer.indexOf('\r\n\r\n');
-        //console.log('rawBuffer.slice(0,index)',rawBuffer.slice(index+2).toString());
-        parseRequest(rawBuffer.slice(0,index+2));
+        //console.log('rawBuffer.slice(0,index)' + rawBuffer.slice(index+2).toString());
+        parseRequest(rawBuffer.slice(0, index + 2));
 
         if (request.headers['Content-Type'] && request.headers['Content-Type'].indexOf('multipart/form-data') > -1) {
-          var c = rawBuffer.slice(index+2).toString();
-          if (c) {
-            //console.log('---c--------',c);
-          } else {
-            //console.log('dataBuf',dataBuf);
-            ////dataBuf.pipe(writableStream);
-            //debugger;
-            //console.log('not c',c);
-          }
+          borderStream = new ReadableStream(s, rawBuffer.slice(index + 2))
         }
         //console.log('request',request);
 
 
-        //fullDataToServer(s, data, fullData, request, file, fileType);
+        fullDataToServer(s, request, file, fileType);
         fullData ='';
+      }else {
+        //console.log('indexOf in dataHeaders', rawBuffer.toString());
       }
     } else {
-      console.log('indexOf', data);
+      //console.log('indexOf',rawBuffer.toString());
     }
 
 
